@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>عدّاد اليوسج</title>
+<meta name="theme-color" content="#EDE1CD">
 <link rel="icon" href="/icon.svg">
 <link rel="stylesheet" href="/style.css">
 </head>
@@ -11,12 +12,18 @@
 <svg width="0" height="0" aria-hidden="true" class="defs">
   <symbol id="g-claude" viewBox="0 0 24 24"><g stroke="currentColor" stroke-width="2.3" stroke-linecap="round"><path d="M12 2.8v18.4M2.8 12h18.4M6.2 6.2l11.600 11.600M17.800 6.200 6.200 17.800"/></g></symbol>
   <symbol id="g-chatgpt" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8"><rect x="8" y="2.600" width="8" height="18.800" rx="4"/><rect x="8" y="2.600" width="8" height="18.800" rx="4" transform="rotate(60 12 12)"/><rect x="8" y="2.600" width="8" height="18.800" rx="4" transform="rotate(120 12 12)"/></g></symbol>
+  <symbol id="g-refresh" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" d="M19.500 12a7.500 7.500 0 1 1-2.300-5.400M19.800 3.500v4.200h-4.200"/></symbol>
+  <symbol id="g-add" viewBox="0 0 24 24"><path stroke="currentColor" stroke-width="2.600" stroke-linecap="round" d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="g-tablet" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="4.5" y="2.5" width="15" height="19" rx="3"/><path d="M10.5 18.2h3"/></g></symbol>
   <symbol id="g-back" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" d="M5 12h14M12.500 5.500 19 12l-6.500 6.500"/></symbol>
 </svg>
 
 <canvas id="scene" aria-hidden="true"></canvas>
 
-<div id="langs" class="langs" role="group"></div>
+<div class="top">
+  <button id="tablet-open" class="tablet-open" type="button" data-t-label="tablet" hidden><svg aria-hidden="true"><use href="#g-tablet"></use></svg></button>
+  <div id="langs" class="langs" role="group"></div>
+</div>
 <p id="offline" class="notice" role="status" data-t="offline" hidden></p>
 
 <section id="home" class="home">
@@ -33,8 +40,8 @@
     <span class="medal"><svg aria-hidden="true"><use></use></svg></span>
     <div class="title"><h1 class="vendor" tabindex="-1" lang="en"></h1><p class="count"></p></div>
     <div class="actions">
-      <button id="refresh" class="quiet" type="button"></button>
-      <button id="add" class="solid" type="button" data-t="add"></button>
+      <button id="refresh" class="quiet" type="button"><svg aria-hidden="true"><use href="#g-refresh"></use></svg><span></span></button>
+      <button id="add" class="solid" type="button" data-t-label="add"><svg aria-hidden="true"><use href="#g-add"></use></svg><span data-t="add"></span></button>
     </div>
   </header>
   <main id="cards"></main>
@@ -47,6 +54,7 @@
       <button class="remove" type="button" data-t-label="remove">✕</button>
     </div>
     <div class="dials"></div>
+    <div class="bars"></div>
     <div class="problem" hidden><span></span><button class="quiet" type="button" data-t="signIn"></button></div>
     <div class="confirm" hidden><span data-t="removeAsk"></span><button class="danger" type="button" data-t="removeYes"></button><button class="quiet" type="button" data-t="removeNo"></button></div>
     <p class="age"></p>
@@ -64,6 +72,14 @@
       <p class="back-in"></p>
       <p class="clock"></p>
     </div>
+  </section>
+</template>
+
+<template id="bar">
+  <section class="bar">
+    <div class="line"><h3></h3><p class="share"><b></b> <small></small></p></div>
+    <div class="rail" role="img"><i></i></div>
+    <div class="line"><p class="back-in"></p><p class="clock"></p></div>
   </section>
 </template>
 
@@ -87,6 +103,29 @@
   <div class="step" data-step="checking"><h2 data-t="signedIn"></h2><p data-t="reading"></p></div>
   <div class="step" data-step="error"><h2 data-t="failed"></h2><p class="why"></p><button class="solid" type="button" id="again" data-t="again"></button></div>
   <button class="quiet close" type="button" id="close"></button>
+</dialog>
+
+<dialog id="tablet">
+  <h2 data-t="tablet"></h2>
+  <p class="lead" data-t="tabletText"></p>
+  <div class="door" hidden>
+    <p data-t="tabletUrl"></p><b id="tablet-url" dir="ltr"></b>
+    <p data-t="tabletCode"></p><b id="tablet-code" dir="ltr"></b>
+    <p class="hint" data-t="tabletWall"></p>
+  </div>
+  <p class="why" id="tablet-problem" hidden></p>
+  <button class="solid wide" type="button" id="tablet-switch"></button>
+  <button class="quiet wide" type="button" id="tablet-close" data-t="close"></button>
+</dialog>
+
+<dialog id="pair">
+  <form>
+    <h2 data-t="pairTitle"></h2>
+    <p class="lead" data-t="pairText"></p>
+    <input id="pair-code" dir="ltr" inputmode="numeric" autocomplete="one-time-code" maxlength="6" data-t-label="pairTitle">
+    <p class="why" id="pair-problem" role="alert" hidden></p>
+    <button class="solid wide" type="submit" data-t="pairGo"></button>
+  </form>
 </dialog>
 
 <script src="/lang.js"></script>

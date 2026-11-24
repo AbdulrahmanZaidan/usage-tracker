@@ -251,7 +251,7 @@ void main() {
     const ms = now - last, dt = Math.max(0, Math.min(.1, ms / 1000));
     if (!tween && !Beans.held && ms < 15) { running = requestAnimationFrame(frame); return; }    // at rest 60 a second is plenty
     last = now;
-    if (ms > 42 && ms < 250) { if (++slow > 24 && quality > .5) { quality *= .8; slow = 0; } }   // lighter on weak GPUs
+    if (ms > 30 && ms < 250) { if (++slow > 24 && quality > .5) { quality *= .8; slow = 0; } }   // lighter on weak GPUs
     else slow = Math.max(0, slow - 1);
     if (tween) {
       const t = now - tween.start;

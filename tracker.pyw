@@ -8,6 +8,7 @@ import os
 import re
 import secrets
 import shutil
+import socketserver
 import stat
 import subprocess
 import sys
@@ -15,10 +16,12 @@ import threading
 import time
 import urllib.request
 import webbrowser
+from http.cookies import CookieError, SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import providers
 from providers import UsageError
+from tablet import Tablet
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 WEB = os.path.join(HERE, 'web')
@@ -56,6 +59,7 @@ class Tracker:
         self.path = os.path.join(DATA, 'accounts.json')
         self.busy, self.due = set(), set()
         self.login, self.importing = None, True
+        self.tablet = None
         self.last_view = time.time()
         os.makedirs(DATA, exist_ok=True)
         try:
@@ -137,6 +141,8 @@ class Tracker:
             self.importing = False
         while True:
             now = time.time()
+            if self.tablet:
+                self.tablet.keep()
             if now - self.last_view < VIEWER_GONE:
                 with self.lock:
                     ready = [a['id'] for a in self.accounts if self.is_due(a, now)]
@@ -255,30 +261,36 @@ class Tracker:
             threading.Thread(target=wipe, args=(self.profile_dir(account_id),), daemon=True).start()
 
     # ── page ──
-    def state(self):
+    def state(self, remote=False):
         self.last_view = time.time()
         with self.lock:
             accounts = [{**{k: a.get(k) for k in ('id', 'provider', 'email', 'plan', 'windows', 'read_at', 'error')},
                          'busy': a['id'] in self.busy} for a in sorted(self.accounts, key=lambda a: ORDER[a['provider']])]
             login = self.login and {k: self.login[k] for k in ('id', 'provider', 'state', 'error')}
-            return {'app': 'usage-tracker', 'now': time.time(), 'accounts': accounts, 'login': login,
-                    'tools': providers.tools(), 'starting': self.importing}
+            state = {'app': 'usage-tracker', 'now': time.time(), 'accounts': accounts, 'starting': self.importing,
+                     'remote': remote}
+            if not remote:                       # signing in and letting devices in happen on the PC only
+                state.update(login=login, tablet=self.tablet and self.tablet.for_pc())
+            return state
 
 
 class Handler(BaseHTTPRequestHandler):
     tracker = None
     protocol_version = 'HTTP/1.1'
+    timeout = 60
 
     def log_message(self, *_):
         pass
 
-    def reply(self, body, kind='application/json', status=200):
+    def reply(self, body, kind='application/json', status=200, cookie=None):
         data = body if isinstance(body, bytes) else json.dumps(body, ensure_ascii=False).encode('utf-8')
         self.send_response(status)
         self.send_header('Content-Type', kind + '; charset=utf-8')
         self.send_header('Content-Length', str(len(data)))
         self.send_header('Cache-Control', 'no-store')
         self.send_header('X-Content-Type-Options', 'nosniff')
+        if cookie:
+            self.send_header('Set-Cookie', cookie)
         self.send_header('Content-Security-Policy',
                          "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; "
                          "base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
@@ -286,17 +298,30 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
     def ours(self):
-        """Only this PC's own page: refuses other sites that point a name at 127.0.0.1 or post to us."""
-        hosts = {'127.0.0.1:%d' % self.server.server_port, 'localhost:%d' % self.server.server_port}
+        """Only our own page: refuses other sites that point a name at this address or post to us."""
+        names = [self.server.server_address[0]] if self.server.remote else ['127.0.0.1', 'localhost']
+        hosts = {'%s:%d' % (n, self.server.server_port) for n in names}
         origin = self.headers.get('Origin')
         return self.headers.get('Host') in hosts and (not origin or origin in {'http://' + h for h in hosts})
+
+    def allowed(self):
+        """The PC itself, or a device that was let in."""
+        if not self.server.remote:
+            return True
+        try:
+            key = SimpleCookie(self.headers.get('Cookie') or '').get('key')
+        except CookieError:
+            return False
+        return bool(key) and self.tracker.tablet.knows(key.value)
 
     def do_GET(self):
         if not self.ours():
             return self.reply({'error': 'forbidden'}, status=403)
         path = self.path.split('?')[0]
         if path == '/api/state':
-            return self.reply(self.tracker.state())
+            if not self.allowed():
+                return self.reply({'error': 'pair'}, status=401)
+            return self.reply(self.tracker.state(self.server.remote))
         if path in FILES:
             name, kind = FILES[path]
             with open(os.path.join(WEB, name), 'rb') as f:
@@ -308,9 +333,18 @@ class Handler(BaseHTTPRequestHandler):
         raw = self.rfile.read(min(length, 10_000))
         if not self.ours() or self.headers.get('X-Usage-Tracker') != '1':
             return self.reply({'error': 'forbidden'}, status=403)
-        t = self.tracker
+        t, remote = self.tracker, self.server.remote
         try:
             body = json.loads(raw or b'{}')
+            if remote and self.path == '/api/pair':
+                key = t.tablet.pair(body['code'])
+                if not key:
+                    return self.reply({'error': 'pair_wrong'}, status=403)
+                return self.reply(t.state(True), cookie='key=%s; Path=/; Max-Age=31536000; HttpOnly; SameSite=Strict' % key)
+            if not self.allowed():
+                return self.reply({'error': 'pair'}, status=401)
+            if remote and self.path != '/api/refresh':
+                return self.reply({'error': 'forbidden'}, status=403)
             if self.path == '/api/refresh':
                 t.due.update(a['id'] for a in t.accounts)
             elif self.path == '/api/login':
@@ -321,16 +355,23 @@ class Handler(BaseHTTPRequestHandler):
                 t.cancel_login()
             elif self.path == '/api/remove':
                 t.remove(body['account'])
+            elif self.path == '/api/tablet':
+                t.tablet.switch(body['on'] is True)
             else:
                 return self.reply({'error': 'not found'}, status=404)
         except (ValueError, KeyError, TypeError, AttributeError) as e:
             return self.reply({'error': str(e)}, status=400)
-        self.reply(t.state())
+        self.reply(t.state(remote))
 
 
 class Server(ThreadingHTTPServer):
     daemon_threads = True
     allow_reuse_address = False          # on Windows reuse would let two copies share the port
+    remote = False                       # True on the server that other devices reach
+
+    def server_bind(self):               # HTTPServer would also look the address up in DNS, which can hang
+        socketserver.TCPServer.server_bind(self)
+        self.server_name, self.server_port = self.server_address[:2]
 
 
 def already_running(port):
@@ -365,19 +406,26 @@ def main():
                 return
     if not server:
         return
-    Handler.tracker = Tracker()
-    threading.Thread(target=Handler.tracker.loop, daemon=True).start()
+    tracker = Handler.tracker = Tracker()
+
+    def door(ip):
+        other = Server((ip, port), Handler)
+        other.remote = True
+        return other
+
+    tracker.tablet = Tablet(DATA, door)
+    threading.Thread(target=tracker.loop, daemon=True).start()
     if window:
         threading.Thread(target=server.serve_forever, daemon=True).start()
         proc = open_window(port)
         if proc:
             proc.wait()                  # closing the window stops the program,
             seen, quiet = 0, 0           # unless the page is still open somewhere else
-            while quiet < 8:
+            while quiet < 8:             # (or a tablet may still want it)
                 time.sleep(2)
-                quiet = quiet + 1 if Handler.tracker.last_view == seen else 0
-                seen = Handler.tracker.last_view
-            login = Handler.tracker.login
+                quiet = quiet + 1 if tracker.last_view == seen and not tracker.tablet.on else 0
+                seen = tracker.last_view
+            login = tracker.login
             if login:
                 login['job'].cancel()
             return
