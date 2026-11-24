@@ -119,7 +119,8 @@ class Tracker:
             account['tried_at'], account['error'] = time.time(), error
             if result:                           # on an error the last good numbers stay on screen
                 account.update(windows=result['windows'], read_at=time.time(),
-                               email=result['email'] or account.get('email'), plan=result['plan'] or account.get('plan'))
+                               email=result['email'] or account.get('email'), plan=result['plan'] or account.get('plan'),
+                               name=result['name'] or account.get('name'))
             self.save()
 
     def is_due(self, a, now):
@@ -172,7 +173,7 @@ class Tracker:
     def add(self, provider, local, account_id, result):
         now = time.time()
         self.accounts.append({'id': account_id, 'provider': provider, 'local': local, 'email': result['email'],
-                              'plan': result['plan'], 'windows': result['windows'], 'read_at': now, 'tried_at': now,
+                              'name': result['name'], 'plan': result['plan'], 'windows': result['windows'], 'read_at': now, 'tried_at': now,
                               'error': None})
 
     # ── sign-in ──
@@ -264,7 +265,7 @@ class Tracker:
     def state(self, remote=False):
         self.last_view = time.time()
         with self.lock:
-            accounts = [{**{k: a.get(k) for k in ('id', 'provider', 'email', 'plan', 'windows', 'read_at', 'error')},
+            accounts = [{**{k: a.get(k) for k in ('id', 'provider', 'email', 'name', 'plan', 'windows', 'read_at', 'error')},
                          'busy': a['id'] in self.busy} for a in sorted(self.accounts, key=lambda a: ORDER[a['provider']])]
             login = self.login and {k: self.login[k] for k in ('id', 'provider', 'state', 'error')}
             state = {'app': 'usage-tracker', 'now': time.time(), 'accounts': accounts, 'starting': self.importing,

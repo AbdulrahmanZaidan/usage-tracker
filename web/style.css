@@ -107,8 +107,11 @@ main { --ring: 200px; display: grid; grid-template-columns: repeat(var(--cols, 1
   container-type: inline-size; display: flex; flex-direction: column; min-width: 0; padding: 18px 22px 12px; border-radius: 28px;
   background: var(--cream); box-shadow: 0 1px 0 #FFFDF8 inset, 0 22px 44px -28px rgb(84 52 24 / .6);
 }
-.who { display: flex; align-items: center; gap: 9px; min-height: 30px; }
-.email { min-width: 0; font-size: 15.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.who { display: flex; align-items: flex-start; gap: 9px; }
+.id { display: flex; flex-direction: column; align-items: flex-start; min-width: 0; line-height: 1.4; }
+.name { display: flex; align-items: center; gap: 8px; max-width: 100%; }
+.name bdi { min-width: 0; font-size: 17px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.email { max-width: 100%; font-size: 12.5px; color: var(--soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .plan { flex: none; padding: 1px 10px; border-radius: 99px; background: #E9D8BA; font-size: 12.5px; font-weight: 600; color: #5D432F; text-transform: capitalize; }
 .plan:empty { display: none; }
 .remove { flex: none; margin-inline: auto -8px; padding: 4px 8px; border-radius: 9px; background: transparent; color: #8C735C; font-size: 13px; }
@@ -152,11 +155,12 @@ main { --ring: 200px; display: grid; grid-template-columns: repeat(var(--cols, 1
   [data-shape="wide"] .dial { gap: 18px; }
   [data-shape="wide"] .words .back-in { font-size: 16px; }
 }
-[data-shape="mini"] .card { padding: 10px 16px 12px; border-radius: 22px; }
-[data-shape="mini"] .who { min-height: 26px; }
+[data-shape="mini"] .card { padding: 9px 16px 10px; border-radius: 22px; }
+[data-shape="mini"] .name bdi { font-size: 15.5px; }
 [data-shape="mini"] .dial { flex-direction: row; gap: 14px; margin: 4px 0 8px; text-align: start; }
 [data-shape="mini"] .words .back-in { font-size: 15px; }
-[data-shape="mini"] :is(.clock, .words h3) { font-size: 13px; }
+[data-shape="mini"] .clock { font-size: 13px; }
+[data-shape="mini"] .words h3 { display: none; }
 [data-shape="mini"] .bar { padding-top: 7px; }
 [data-shape="mini"] .bar .back-in { font-size: 13.5px; }
 [data-shape="mini"] .rail { height: 9px; margin: 2px 0 3px; }

@@ -246,9 +246,12 @@ function cardFor(a) {
   $('.problem button', el).onclick = () => startLogin(a.provider, a.id);
   return el;
 }
+// ChatGPT gives no name: "first.last@…" reads as "first last"
+const nameFrom = email => email && email.split('@')[0].split('+')[0].replace(/[._-]+/g, ' ').trim();
 function paintCard(el, a) {
   $('.plan', el).textContent = a.plan || '';
-  $('.email', el).textContent = a.email || VENDOR[a.provider];
+  $('.name bdi', el).textContent = a.name || nameFrom(a.email) || VENDOR[a.provider];
+  $('.email', el).textContent = a.email || '';
   const [first, ...longer] = a.windows || [];    // shortest first
   const dials = $('.dials', el), bars = $('.bars', el);
   for (const d of [...dials.children]) if (!first || String(first.minutes) !== d.dataset.min) d.remove();
@@ -314,9 +317,9 @@ function fit() {
     const rows = Math.ceil(n / cols), w = (W - gap * (cols - 1)) / cols, h = (H - gap * (rows - 1)) / rows - (notes ? 60 : 0);
     // [shape, narrowest card, largest ring that could fit, smallest useful ring, how much we like it]
     for (const [shape, narrow, ring, least, like] of [
-      ['tall', 208, Math.min(w - 56, h - 250, 240), 88, 1],
-      ['wide', 310, Math.min(w * .4, h - 180, 250), 88, 1],
-      ['mini', 290, Math.min(w * .3, h - 110, 124), 62, .8]]) {
+      ['tall', 208, Math.min(w - 56, h - 264, 240), 88, 1],
+      ['wide', 310, Math.min(w * .4, h - 194, 250), 88, 1],
+      ['mini', 290, Math.min(w * .3, h - 124, 124), 52, .8]]) {
       if (w >= narrow && ring >= least) options.push({ cols, rows, shape, ring, least, score: ring * like * n / (cols * rows) });      // no empty places
     }
   }

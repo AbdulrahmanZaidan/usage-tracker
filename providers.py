@@ -196,6 +196,19 @@ def _claude_env(profile):
     return env
 
 
+def _claude_name(profile, email):
+    """The name on the account, as Claude Code noted it down at sign-in; None if it is not there."""
+    home = profile or os.environ.get('CLAUDE_CONFIG_DIR') or os.path.expanduser('~')
+    try:
+        with open(os.path.join(home, '.claude.json'), encoding='utf-8') as f:
+            account = json.load(f).get('oauthAccount') or {}
+    except (OSError, ValueError, AttributeError):
+        return None
+    if (account.get('emailAddress') or '').lower() != (email or '').lower():
+        return None
+    return account.get('displayName') or account.get('fullName')
+
+
 def read_claude(profile):
     exe = claude_exe()
     if not exe:
@@ -218,7 +231,8 @@ def read_claude(profile):
         if 'login' in low or 'expired' in low or 'authenticat' in low:
             raise UsageError('login')
         raise UsageError('no_numbers')
-    return {'email': who.get('email'), 'plan': who.get('subscriptionType'), 'windows': windows}
+    return {'email': who.get('email'), 'name': _claude_name(profile, who.get('email')),
+            'plan': who.get('subscriptionType'), 'windows': windows}
 
 
 # ── ChatGPT (Codex) ──────────────────────────────────────────────────────────
@@ -332,7 +346,8 @@ def read_chatgpt(profile):
         windows = parse_codex(rpc.call('account/rateLimits/read').get('rateLimits'))
     if not windows:
         raise UsageError('no_limits')
-    return {'email': account.get('email'), 'plan': account.get('planType'), 'windows': windows}
+    return {'email': account.get('email'), 'name': account.get('workspaceName'), 'plan': account.get('planType'),
+            'windows': windows}
 
 
 # ── Gemini ───────────────────────────────────────────────────────────────────
@@ -430,7 +445,7 @@ def read_gemini(profile):
             f.write(text)                       # so an unexpected page layout can be looked at
         raise UsageError('gemini_page')
     who = re.search(r'Google Account: ?[^"<>]*?([\w.+-]+@[\w-]+\.[\w.-]+)', html)
-    return {'email': who.group(1).lower() if who else None, 'plan': None, 'windows': windows}
+    return {'email': who.group(1).lower() if who else None, 'name': None, 'plan': None, 'windows': windows}
 
 
 READ = {'claude': read_claude, 'chatgpt': read_chatgpt, 'gemini': read_gemini}
