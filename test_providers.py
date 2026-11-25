@@ -2,7 +2,8 @@
 import unittest
 from datetime import datetime
 
-from providers import FIVE_HOURS, WEEK, page_text, parse_claude, parse_codex, parse_gemini, parse_when
+from providers import (FIVE_HOURS, WEEK, page_text, parse_claude, parse_claude_resets, parse_codex, parse_codex_resets,
+                       parse_gemini, parse_when)
 
 NOW = datetime(2026, 11, 24, 23, 0).timestamp()          # a Tuesday
 
@@ -63,6 +64,41 @@ class Codex(unittest.TestCase):
     def test_one_window_or_none(self):
         self.assertEqual(len(parse_codex({'primary': {'usedPercent': 1, 'windowDurationMins': 43200}, 'secondary': None})), 1)
         self.assertEqual(parse_codex(None), [])
+
+
+class Resets(unittest.TestCase):
+    def claude(self, **more):
+        return parse_claude_resets({'oauthAccount': {'accountUuid': 'me'}, **more}, NOW)
+
+    def cached(self, block, uuid='me'):
+        return {'cachedUsageUtilization': {'accountUuid': uuid, 'utilization': {'cedar_ember': block}}}
+
+    def test_codex(self):
+        self.assertIsNone(parse_codex_resets(None))
+        self.assertEqual(parse_codex_resets({'availableCount': 0, 'credits': []}), {'count': 0, 'until': None})
+        self.assertEqual(parse_codex_resets({'availableCount': 2, 'credits': [
+            {'status': 'available', 'expiresAt': 900}, {'status': 'available', 'expiresAt': 500},
+            {'status': 'redeemed', 'expiresAt': 100}]}), {'count': 2, 'until': 500})
+
+    def test_claude_not_asked_is_not_zero(self):
+        self.assertIsNone(self.claude())
+        self.assertIsNone(self.claude(**self.cached(None)))
+        self.assertIsNone(self.claude(**self.cached({'grants': []}, uuid='someone else')))
+        self.assertIsNone(parse_claude_resets({}, NOW))
+
+    def test_claude_grants(self):
+        self.assertEqual(self.claude(**self.cached({'eligible': False, 'grants': []})), {'count': 0, 'until': None})
+        grants = [{'resets_left': 1, 'ends_at': '2026-12-10T22:00:00+00:00'}, {'resets_left': 2, 'ends_at': None},
+                  {'resets_left': 3, 'ends_at': '2026-11-01T00:00:00+00:00'},
+                  {'resets_left': 4, 'ends_at': None, 'paused': True}]
+        self.assertEqual(self.claude(**self.cached({'grants': grants})), {'count': 3, 'until': 1796940000.0})
+
+    def test_claude_note(self):
+        note = {'accountUuid': 'me', 'holdsUnusedReset': False, 'checkedAt': (NOW - 60) * 1000, 'validUntil': (NOW + 60) * 1000}
+        self.assertEqual(self.claude(unusedLimitResetStatusCache=note), {'count': 0, 'until': None})
+        self.assertEqual(self.claude(unusedLimitResetStatusCache={**note, 'holdsUnusedReset': True}), {'count': None, 'until': None})
+        self.assertIsNone(self.claude(unusedLimitResetStatusCache={**note, 'checkedAt': (NOW - 4 * 86400) * 1000}))
+        self.assertIsNone(self.claude(unusedLimitResetStatusCache={**note, 'accountUuid': 'someone else'}))
 
 
 class Gemini(unittest.TestCase):

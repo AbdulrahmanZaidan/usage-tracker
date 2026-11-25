@@ -244,7 +244,26 @@ function cardFor(a) {
   $('.confirm .quiet', el).onclick = () => ask(false);
   $('.confirm .danger', el).onclick = () => sync('/api/remove', { account: a.id });
   $('.problem button', el).onclick = () => startLogin(a.provider, a.id);
+  $('.resets a', el).onclick = e => {             // the PC window has its own browser profile: use the person's browser
+    if (!REMOTE) { e.preventDefault(); sync('/api/claude-usage', {}); }
+  };
   return el;
+}
+// how many limit resets are left: a bean each. Unknown is said, never shown as 0.
+function paintResets(el, a) {
+  const r = a.resets, n = r ? r.count : null, beans = $('.beans', el), want = r ? Math.min(n ?? 1, 5) : 0;
+  el.hidden = !r && a.provider !== 'claude';
+  if (beans.childElementCount !== want) {
+    beans.replaceChildren(...Array.from({ length: want }, () => {
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg'), use = document.createElementNS(svg.namespaceURI, 'use');
+      use.setAttribute('href', '#g-bean');
+      svg.append(use);
+      return svg;
+    }));
+  }
+  $('b', el).textContent = r ? (n ?? T.resetsSome) : '';
+  $('small', el).textContent = r && r.until ? T.resetsUntil(fmt(new Date(r.until * 1000), { day: 'numeric', month: 'short' })) : '';
+  $('a', el).hidden = !!r;
 }
 // ChatGPT gives no name: "first.last@…" reads as "first last"
 const nameFrom = email => email && email.split('@')[0].split('+')[0].replace(/[._-]+/g, ' ').trim();
@@ -258,6 +277,7 @@ function paintCard(el, a) {
   for (const b of [...bars.children]) if (!longer.some(w => String(w.minutes) === b.dataset.min)) b.remove();
   if (first) paintDial(partFor(dials, '#dial', first.minutes), first, longer);
   for (const w of longer) paintBar(partFor(bars, '#bar', w.minutes), w);
+  paintResets($('.resets', el), a);
   $('.problem', el).hidden = !a.error;
   if (a.error) {
     $('.problem span', el).textContent = problem(a.error);
@@ -317,9 +337,9 @@ function fit() {
     const rows = Math.ceil(n / cols), w = (W - gap * (cols - 1)) / cols, h = (H - gap * (rows - 1)) / rows - (notes ? 60 : 0);
     // [shape, narrowest card, largest ring that could fit, smallest useful ring, how much we like it]
     for (const [shape, narrow, ring, least, like] of [
-      ['tall', 208, Math.min(w - 56, h - 264, 240), 88, 1],
-      ['wide', 310, Math.min(w * .4, h - 194, 250), 88, 1],
-      ['mini', 290, Math.min(w * .3, h - 124, 124), 52, .8]]) {
+      ['tall', 208, Math.min(w - 56, h - 298, 240), 88, 1],
+      ['wide', 310, Math.min(w * .4, h - 228, 250), 88, 1],
+      ['mini', 290, Math.min(w * .3, h - 148, 124), 48, .8]]) {
       if (w >= narrow && ring >= least) options.push({ cols, rows, shape, ring, least, score: ring * like * n / (cols * rows) });      // no empty places
     }
   }

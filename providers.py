@@ -196,17 +196,47 @@ def _claude_env(profile):
     return env
 
 
-def _claude_name(profile, email):
-    """The name on the account, as Claude Code noted it down at sign-in; None if it is not there."""
+def _claude_saved(profile, email):
+    """What Claude Code itself keeps about this account on the PC (no token in it); {} if that is another account."""
     home = profile or os.environ.get('CLAUDE_CONFIG_DIR') or os.path.expanduser('~')
     try:
         with open(os.path.join(home, '.claude.json'), encoding='utf-8') as f:
-            account = json.load(f).get('oauthAccount') or {}
-    except (OSError, ValueError, AttributeError):
+            saved = json.load(f)
+        mine = (saved['oauthAccount']['emailAddress'] or '').lower() == (email or '').lower()
+    except (OSError, ValueError, KeyError, TypeError):
+        return {}
+    return saved if mine else {}
+
+
+def _epoch(text):
+    try:
+        return datetime.fromisoformat(text).timestamp()
+    except (TypeError, ValueError):
         return None
-    if (account.get('emailAddress') or '').lower() != (email or '').lower():
+
+
+def parse_claude_resets(saved, now=None):
+    """Limit resets the account still holds: {'count', 'until'}; count None = at least one; None = not known.
+
+    Claude Code asks for them only in its interactive screens, so a missing block means "not asked", never zero."""
+    now = time.time() if now is None else now
+    uuid = (saved.get('oauthAccount') or {}).get('accountUuid')
+    if not uuid:
         return None
-    return account.get('displayName') or account.get('fullName')
+    cached = saved.get('cachedUsageUtilization') or {}
+    block = (cached.get('utilization') or {}).get('cedar_ember') if cached.get('accountUuid') == uuid else None
+    if isinstance(block, dict) and isinstance(block.get('grants'), list):
+        live = [(int(g.get('resets_left') or 0), _epoch(g.get('ends_at'))) for g in block['grants']
+                if isinstance(g, dict) and not g.get('paused')]
+        live = [(n, end) for n, end in live if n > 0 and (end is None or end > now)]
+        return {'count': sum(n for n, _ in live), 'until': min((e for _, e in live if e), default=None)}
+    note = saved.get('unusedLimitResetStatusCache') or {}
+    if note.get('accountUuid') == uuid and 0 <= now - (note.get('checkedAt') or 0) / 1000 < 3 * 86400:
+        if note.get('holdsUnusedReset') is False:
+            return {'count': 0, 'until': None}
+        if note.get('holdsUnusedReset') and now < (note.get('validUntil') or 0) / 1000:
+            return {'count': None, 'until': None}
+    return None
 
 
 def read_claude(profile):
@@ -231,8 +261,10 @@ def read_claude(profile):
         if 'login' in low or 'expired' in low or 'authenticat' in low:
             raise UsageError('login')
         raise UsageError('no_numbers')
-    return {'email': who.get('email'), 'name': _claude_name(profile, who.get('email')),
-            'plan': who.get('subscriptionType'), 'windows': windows}
+    saved = _claude_saved(profile, who.get('email'))
+    account = saved.get('oauthAccount') or {}
+    return {'email': who.get('email'), 'name': account.get('displayName') or account.get('fullName'),
+            'plan': who.get('subscriptionType'), 'windows': windows, 'resets': parse_claude_resets(saved)}
 
 
 # ── ChatGPT (Codex) ──────────────────────────────────────────────────────────
@@ -338,16 +370,24 @@ def parse_codex(limits):
     return sorted(windows, key=lambda w: w['minutes'])
 
 
+def parse_codex_resets(credits):
+    if not credits or credits.get('availableCount') is None:
+        return None
+    ends = [c['expiresAt'] for c in credits.get('credits') or [] if c.get('status') == 'available' and c.get('expiresAt')]
+    return {'count': int(credits['availableCount']), 'until': min(ends, default=None)}
+
+
 def read_chatgpt(profile):
     with _Codex(profile) as rpc:
         account = (rpc.call('account/read', {'refreshToken': False}) or {}).get('account')
         if not account or account.get('type') != 'chatgpt':
             raise UsageError('login')
-        windows = parse_codex(rpc.call('account/rateLimits/read').get('rateLimits'))
+        limits = rpc.call('account/rateLimits/read')
+        windows = parse_codex(limits.get('rateLimits'))
     if not windows:
         raise UsageError('no_limits')
     return {'email': account.get('email'), 'name': account.get('workspaceName'), 'plan': account.get('planType'),
-            'windows': windows}
+            'windows': windows, 'resets': parse_codex_resets(limits.get('rateLimitResetCredits'))}
 
 
 # ── Gemini ───────────────────────────────────────────────────────────────────
@@ -445,7 +485,8 @@ def read_gemini(profile):
             f.write(text)                       # so an unexpected page layout can be looked at
         raise UsageError('gemini_page')
     who = re.search(r'Google Account: ?[^"<>]*?([\w.+-]+@[\w-]+\.[\w.-]+)', html)
-    return {'email': who.group(1).lower() if who else None, 'name': None, 'plan': None, 'windows': windows}
+    return {'email': who.group(1).lower() if who else None, 'name': None, 'plan': None, 'windows': windows,
+            'resets': None}
 
 
 READ = {'claude': read_claude, 'chatgpt': read_chatgpt, 'gemini': read_gemini}

@@ -149,23 +149,37 @@ main { --ring: 200px; display: grid; grid-template-columns: repeat(var(--cols, 1
 .rail i { display: block; width: 0; height: 100%; border-radius: 99px; background: var(--mocha); transition: width 1.3s var(--out), background-color .4s; }
 .bar .back-in { font-size: 14.5px; font-weight: 700; }
 
+.resets { display: flex; flex-wrap: wrap; align-items: baseline; align-content: center; column-gap: 7px; min-height: 26px; margin-top: 9px; font-size: 13.5px; }
+.resets .label { margin-inline-end: auto; font-weight: 600; color: var(--soft); white-space: nowrap; }
+.resets > :empty { display: none; }
+.resets b { font: 600 17px/1.2 var(--digits); }
+.resets small { font-size: 12.5px; color: var(--soft); white-space: nowrap; }
+.resets a { font-weight: 600; text-decoration: underline; text-underline-offset: 3px; white-space: nowrap; }
+.resets a:hover { color: var(--mocha); }
+.beans { display: flex; align-self: center; gap: 2px; }
+.beans svg { width: 17px; height: 17px; fill: var(--mocha); stroke: var(--cream); }
+
+@container (max-width: 250px) { .beans { display: none; } }
+
 [data-shape="wide"] .dial { flex-direction: row; justify-content: center; gap: 28px; text-align: start; }
 [data-shape="wide"] .words .back-in { font-size: 18px; }
 @container (max-width: 400px) {
   [data-shape="wide"] .dial { gap: 18px; }
   [data-shape="wide"] .words .back-in { font-size: 16px; }
 }
-[data-shape="mini"] .card { padding: 9px 16px 10px; border-radius: 22px; }
+main[data-shape="mini"] { gap: 10px; }
+[data-shape="mini"] .card { padding: 7px 16px; border-radius: 22px; }
 [data-shape="mini"] .name bdi { font-size: 15.5px; }
-[data-shape="mini"] .dial { flex-direction: row; gap: 14px; margin: 4px 0 8px; text-align: start; }
+[data-shape="mini"] .dial { flex-direction: row; gap: 14px; margin: 2px 0 5px; text-align: start; }
 [data-shape="mini"] .words .back-in { font-size: 15px; }
 [data-shape="mini"] .clock { font-size: 13px; }
 [data-shape="mini"] .words h3 { display: none; }
-[data-shape="mini"] .bar { padding-top: 7px; }
+[data-shape="mini"] .bar { padding-top: 4px; }
 [data-shape="mini"] .bar .back-in { font-size: 13.5px; }
 [data-shape="mini"] .rail { height: 9px; margin: 2px 0 3px; }
 [data-shape="mini"] .share b { font-size: 16px; }
 [data-shape="mini"] .age { display: none; }
+[data-shape="mini"] .resets { min-height: 19px; margin-top: 1px; font-size: 13px; line-height: 1.4; }
 [data-shape="mini"] .figure small { display: none; }
 [data-shape="mini"] .figure b { font-size: calc(var(--ring) * .27); }
 
